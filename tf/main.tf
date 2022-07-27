@@ -30,6 +30,12 @@ provider "vault" {
   token   = "083672fc-4471-4ec4-9b59-a285e463a973"
 }
 
+provider "vault" {
+  alias   = "vault_stag"
+  address = "http://localhost:8401" #Address needs to be different
+  token   = "083672fc-4471-4ec4-9b59-a285e463a973" #Token needs to de different as well for staging
+}
+
 resource "vault_audit" "audit_dev" {
   provider = vault.vault_dev
   type     = "file"
@@ -48,6 +54,16 @@ resource "vault_audit" "audit_prod" {
   }
 }
 
+resource "vault_audit" "audit_stag" {
+  provider = vault.vault_stag
+  type     = "file"
+
+  options = {
+    file_path = "/vault/logs/audit"
+  }
+}
+
+
 resource "vault_auth_backend" "userpass_dev" {
   provider = vault.vault_dev
   type     = "userpass"
@@ -56,6 +72,11 @@ resource "vault_auth_backend" "userpass_dev" {
 
 resource "vault_auth_backend" "userpass_prod" {
   provider = vault.vault_prod
+  type     = "userpass"
+}
+
+resource "vault_auth_backend" "userpass_stag" {
+  provider = vault.vault_stag
   type     = "userpass"
 }
 
@@ -292,6 +313,124 @@ resource "vault_generic_endpoint" "payment_production" {
 EOT
 }
 
+
+resource "vault_generic_secret" "account_staging" {
+  provider = vault.vault_stag
+  path     = "secret/staging/account"
+
+  data_json = <<EOT
+{
+  "db_user":   "account",
+  "db_password": "965d3c27-9e20-4d41-91c9-61e6631870e7"
+}
+EOT
+}
+
+resource "vault_policy" "account_staging" {
+  provider = vault.vault_stag
+  name     = "account-staging"
+
+  policy = <<EOT
+
+path "secret/data/staging/account" {
+    capabilities = ["list", "read"]
+}
+
+EOT
+}
+
+resource "vault_generic_endpoint" "account_staging" {
+  provider             = vault.vault_stag
+  depends_on           = [vault_auth_backend.userpass_stag]
+  path                 = "auth/userpass/users/account-staging"
+  ignore_absent_fields = true
+
+  data_json = <<EOT
+{
+  "policies": ["account-staging"],
+  "password": "123-account-staging"
+}
+EOT
+}
+
+resource "vault_generic_secret" "gateway_staging" {
+  provider = vault.vault_stag
+  path     = "secret/staging/gateway"
+
+  data_json = <<EOT
+{
+  "db_user":   "gateway",
+  "db_password": "10350819-4802-47ac-9476-6fa781e35cfd"
+}
+EOT
+}
+
+resource "vault_policy" "gateway_staging" {
+  provider = vault.vault_stag
+  name     = "gateway-staging"
+
+  policy = <<EOT
+
+path "secret/data/staging/gateway" {
+    capabilities = ["list", "read"]
+}
+
+EOT
+}
+
+resource "vault_generic_endpoint" "gateway_staging" {
+  provider             = vault.vault_stag
+  depends_on           = [vault_auth_backend.userpass_stag]
+  path                 = "auth/userpass/users/gateway-staging"
+  ignore_absent_fields = true
+
+  data_json = <<EOT
+{
+  "policies": ["gateway-staging"],
+  "password": "123-gateway-staging"
+}
+EOT
+}
+
+resource "vault_generic_secret" "payment_staging" {
+  provider = vault.vault_stag
+  path     = "secret/staging/payment"
+
+  data_json = <<EOT
+{
+  "db_user":   "payment",
+  "db_password": "a63e8938-6d49-49ea-905d-e03a683059e7"
+}
+EOT
+}
+
+resource "vault_policy" "payment_staging" {
+  provider = vault.vault_stag
+  name     = "payment-staging"
+
+  policy = <<EOT
+
+path "secret/data/staging/payment" {
+    capabilities = ["list", "read"]
+}
+
+EOT
+}
+
+resource "vault_generic_endpoint" "payment_staging" {
+  provider             = vault.vault_stag
+  depends_on           = [vault_auth_backend.userpass_stag]
+  path                 = "auth/userpass/users/payment-staging"
+  ignore_absent_fields = true
+
+  data_json = <<EOT
+{
+  "policies": ["payment-staging"],
+  "password": "123-payment-staging"
+}
+EOT
+}
+
 resource "docker_container" "account_production" {
   image = "form3tech-oss/platformtest-account"
   name  = "account_production"
@@ -405,6 +544,66 @@ resource "docker_container" "payment_development" {
 
   networks_advanced {
     name = "vagrant_development"
+  }
+
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+resource "docker_container" "account_staging" {
+  image = "form3tech-oss/platformtest-account"
+  name  = "account_staging"
+
+  env = [
+    "VAULT_ADDR=http://vault-staging:8200",
+    "VAULT_USERNAME=account-staging",
+    "VAULT_PASSWORD=123-account-staging",
+    "ENVIRONMENT=staging"
+  ]
+
+  networks_advanced {
+    name = "vagrant_staging"
+  }
+
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+resource "docker_container" "gateway_staging" {
+  image = "form3tech-oss/platformtest-gateway"
+  name  = "gateway_staging"
+
+  env = [
+    "VAULT_ADDR=http://vault-staging:8200",
+    "VAULT_USERNAME=gateway-staging",
+    "VAULT_PASSWORD=123-gateway-staging",
+    "ENVIRONMENT=staging"
+  ]
+
+  networks_advanced {
+    name = "vagrant_staging"
+  }
+
+  lifecycle {
+    ignore_changes = all
+  }
+}
+
+resource "docker_container" "payment_staging" {
+  image = "form3tech-oss/platformtest-payment"
+  name  = "payment_staging"
+
+  env = [
+    "VAULT_ADDR=http://vault-staging:8200",
+    "VAULT_USERNAME=payment-staging",
+    "VAULT_PASSWORD=123-payment-staging",
+    "ENVIRONMENT=staging"
+  ]
+
+  networks_advanced {
+    name = "vagrant_staging"
   }
 
   lifecycle {
